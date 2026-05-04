@@ -1,0 +1,59 @@
+name: deploy dotnet application
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  build-dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - name: get the code
+        uses: actions/checkout@v4
+
+      - name: setup dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: get dotnet dependencies
+        run: dotnet restore
+
+      - name: initialize codeql
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+
+      - name: build release
+        run: dotnet build -c Release dotnetcoresample.csproj
+
+      - name: dotnet test
+        run: dotnet test --no-build --logger "trx;LogFileName=results.xml"
+
+      - name: codeql analyze          # ← moved up, right after build+test
+        uses: github/codeql-action/analyze@v4
+
+      - name: build publishing
+        run: dotnet publish -c Release -o ./jjk/ dotnetcoresample.csproj
+
+      - name: tar the file
+        run: tar -cvzf dotnetcoresample.tar.gz ./jjk/
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-app
+          path: dotnetcoresample.tar.gz
+
+      - name: publish test results    # ← always keep this last
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+            files: "**/*.trx"
+            comment_mode: always
